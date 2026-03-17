@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import matplotlib.pyplot as plt
 
 ativos = ["PETR4", "VALE3", "ITUB4", "WEGE3", "BBAS3"]
 
@@ -58,12 +59,32 @@ def mutacao(carteira, taxa=0.1):
 def algoritmo_genetico():
     TAM_POP = 100
     GERACOES = 200
+    ELITE_SIZE = 0
 
     populacao = criar_populacao(TAM_POP)
+
+    historico_fitness = []
+    historico_media = []
+
     for geracao in range(GERACOES):
+        #Avaliação
+        fitness_pop = [fitness(c) for c in populacao]
+        melhor_fitness = max(fitness_pop)
+        media_fitness = sum(fitness_pop) / len(fitness_pop)
+        
+        historico_fitness.append(melhor_fitness)
+        historico_media.append(media_fitness)
+
         nova_pop = []
 
-        for _ in range(TAM_POP):
+        #Se ELITE_SIZE for zero, simplesmente roda algoritmo genetico com nova_pop vazia
+        if ELITE_SIZE > 0:
+            #Ordena população (melhores primeiro)
+            populacao_ordenada = sorted(populacao, key=fitness, reverse=True)
+            #Elitismo (copiando os melhores para nova_pop)
+            nova_pop.extend(populacao_ordenada[:ELITE_SIZE])
+        
+        while len(nova_pop) < TAM_POP:
             pai1 = selecao(populacao)
             pai2 = selecao(populacao)
 
@@ -76,7 +97,7 @@ def algoritmo_genetico():
 
     melhor = max(populacao, key=fitness)
 
-    return melhor
+    return melhor, historico_fitness, historico_media
 
 #Fazer com que a carteira respeite PESO_MIN e PESO_MAX
 def ajustar_carteira(pesos):
@@ -95,7 +116,7 @@ def ajustar_carteira(pesos):
     pesos = pesos / np.sum(pesos)
     return pesos
 
-melhor_carteira = algoritmo_genetico()
+melhor_carteira, hist_fitness, hist_media = algoritmo_genetico()
 retorno = np.sum(melhor_carteira * retornos)
 dividendos_total = np.sum(melhor_carteira * dividendos)
 risco = np.sum(melhor_carteira * riscos)
@@ -107,3 +128,16 @@ print("\nFitness:", fitness(melhor_carteira))
 print("Retorno Esperado:", retorno)
 print("Dividendos Total:", dividendos_total)
 print("Risco:", risco)
+
+plt.figure(figsize=(8, 4))
+
+plt.plot(hist_fitness, label="Melhor Fitness")
+#plt.plot(hist_media, label="Média Fitness")
+
+plt.xlabel("Geração")
+plt.ylabel("Fitness")
+plt.title("Convergência do Algoritmo Genético")
+
+plt.legend()
+plt.savefig("sem_elitismo.png")
+plt.show()
