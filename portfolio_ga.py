@@ -2,6 +2,25 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 
+#Ao adicionar perfis de investidor, o que muda é a função de fitness
+perfis = {
+    "conservador": {
+        "retorno": 0.3,
+        "dividendos": 0.2,
+        "risco": 0.5
+    },
+    "dividendos": {
+        "retorno": 0.2,
+        "dividendos": 0.6,
+        "risco": 0.2
+    },
+    "crescimento": {
+        "retorno": 0.6,
+        "dividendos": 0.1,
+        "risco": 0.3
+    }
+}
+
 ativos = ["PETR4", "VALE3", "ITUB4", "WEGE3", "BBAS3"]
 
 #dados simulados
@@ -24,19 +43,23 @@ def criar_populacao(tamanho):
     return [criar_carteira() for _ in range(tamanho)]
 
 #fitness --> maximizar retorno e dividendos e minimizar risco
-def fitness(carteira):
+def fitness(carteira, perfil):
     retorno = np.sum(carteira * retornos)
     dividendos_total = np.sum(carteira * dividendos)
     risco = np.sum(carteira * riscos)
 
-    score = retorno + dividendos_total - risco
+    score = (
+        perfil["retorno"] * retorno +
+        perfil["dividendos"] * dividendos_total - 
+        perfil["risco"] * risco
+    )
 
     return score
 
 #seleção por torneio
-def selecao(populacao, k=3):
+def selecao(populacao, perfil, k=3):
     candidatos = random.sample(populacao, k)
-    candidatos.sort(key=fitness, reverse=True)
+    candidatos.sort(key=lambda c: fitness(c, perfil), reverse=True)
 
     return candidatos[0]
 
@@ -56,10 +79,10 @@ def mutacao(carteira, taxa=0.1):
     return carteira
 
 #loop principal do algoritmo
-def algoritmo_genetico():
+def algoritmo_genetico(perfil):
     TAM_POP = 100
     GERACOES = 200
-    ELITE_SIZE = 0
+    ELITE_SIZE = 3
 
     populacao = criar_populacao(TAM_POP)
 
@@ -68,7 +91,7 @@ def algoritmo_genetico():
 
     for geracao in range(GERACOES):
         #Avaliação
-        fitness_pop = [fitness(c) for c in populacao]
+        fitness_pop = [fitness(c, perfil) for c in populacao]
         melhor_fitness = max(fitness_pop)
         media_fitness = sum(fitness_pop) / len(fitness_pop)
         
@@ -80,13 +103,13 @@ def algoritmo_genetico():
         #Se ELITE_SIZE for zero, simplesmente roda algoritmo genetico com nova_pop vazia
         if ELITE_SIZE > 0:
             #Ordena população (melhores primeiro)
-            populacao_ordenada = sorted(populacao, key=fitness, reverse=True)
+            populacao_ordenada = sorted(populacao, key=lambda c: fitness(c, perfil), reverse=True)
             #Elitismo (copiando os melhores para nova_pop)
             nova_pop.extend(populacao_ordenada[:ELITE_SIZE])
         
         while len(nova_pop) < TAM_POP:
-            pai1 = selecao(populacao)
-            pai2 = selecao(populacao)
+            pai1 = selecao(populacao, perfil)
+            pai2 = selecao(populacao, perfil)
 
             filho = cruzamento(pai1, pai2)
             filho = mutacao(filho)
@@ -95,7 +118,7 @@ def algoritmo_genetico():
 
         populacao = nova_pop
 
-    melhor = max(populacao, key=fitness)
+    melhor = max(populacao, key=lambda c: fitness(c, perfil))
 
     return melhor, historico_fitness, historico_media
 
@@ -116,28 +139,32 @@ def ajustar_carteira(pesos):
     pesos = pesos / np.sum(pesos)
     return pesos
 
-melhor_carteira, hist_fitness, hist_media = algoritmo_genetico()
-retorno = np.sum(melhor_carteira * retornos)
-dividendos_total = np.sum(melhor_carteira * dividendos)
-risco = np.sum(melhor_carteira * riscos)
+#Rodar todos os perfis automaticamente
+for nome, perfil in perfis.items():
+    print("\n==========================")
+    print("Perfil:", nome)
 
-print("Melhor carteira encontrada:\n")
-for ativo, peso in zip(ativos, melhor_carteira):
-    print(f"{ativo}: {peso:.2%}")
-print("\nFitness:", fitness(melhor_carteira))
-print("Retorno Esperado:", retorno)
-print("Dividendos Total:", dividendos_total)
-print("Risco:", risco)
+    melhor_carteira, hist_fitness, _ = algoritmo_genetico(perfil)
+
+    for ativo, peso in zip(ativos, melhor_carteira):
+        print(f"{ativo}: {peso:.2%}")
+
+    retorno = round(np.sum(melhor_carteira * retornos), 3)
+    dividendos_total = round(np.sum(melhor_carteira * dividendos), 3)
+    risco = round(np.sum(melhor_carteira * riscos), 3)
+
+    print("Retorno:", retorno)
+    print("Dividendos:", dividendos_total)
+    print("Risco:", risco)
 
 plt.figure(figsize=(8, 4))
 
 plt.plot(hist_fitness, label="Melhor Fitness")
-#plt.plot(hist_media, label="Média Fitness")
 
 plt.xlabel("Geração")
 plt.ylabel("Fitness")
 plt.title("Convergência do Algoritmo Genético")
 
 plt.legend()
-plt.savefig("sem_elitismo.png")
+plt.savefig("com_elitismo.png")
 plt.show()
