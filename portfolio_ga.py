@@ -21,12 +21,23 @@ perfis = {
     }
 }
 
-ativos = ["PETR4", "VALE3", "ITUB4", "WEGE3", "BBAS3"]
+ativos = ["PETR4", "VALE3", "ITUB4", "WEGE3", "BBAS3", #ações
+          "HGLG11", "XPLG11", "KNRI11", "MXRF11", "VISC11" #fiis
+]
 
 #dados simulados
-retornos = np.array([0.15, 0.12, 0.10, 0.18, 0.11]) #retorno esperado
-dividendos = np.array([0.10, 0.07, 0.08, 0.02, 0.09]) #dividend yield
-riscos = np.array([0.20, 0.18, 0.12, 0.25, 0.14]) #risco individual
+retornos = np.array([0.15, 0.12, 0.10, 0.18, 0.11, #ações
+                     0.08, 0.09, 0.07, 0.06, 0.085 #fiis
+]) #retorno esperado
+
+dividendos = np.array([0.10, 0.07, 0.08, 0.02, 0.09, #ações
+                       0.11, 0.10, 0.09, 0.12, 0.095 #fiis
+]) #dividend yield
+
+riscos = np.array([0.20, 0.18, 0.12, 0.25, 0.14, #ações
+                   0.10, 0.11, 0.09, 0.08, 0.10 #fiis
+]) #risco individual
+
 #risco --> desvio padrão dos retornos OU volatilidade --> Quanto MAIOR, PIOR
 
 NUM_ATIVOS = len(ativos)
@@ -43,17 +54,24 @@ def criar_populacao(tamanho):
     return [criar_carteira() for _ in range(tamanho)]
 
 #fitness --> maximizar retorno e dividendos e minimizar risco
-def fitness(carteira, perfil):
+def fitness(carteira, perfil, penalizacao = True):
     retorno = np.sum(carteira * retornos)
     dividendos_total = np.sum(carteira * dividendos)
     risco = np.sum(carteira * riscos)
-
+    
     score = (
         perfil["retorno"] * retorno +
         perfil["dividendos"] * dividendos_total - 
         perfil["risco"] * risco
     )
 
+    #adicionando penalização por concentração
+    #sem isso, o algoritmo genético tende a concentrar valores
+    #em dois ativos e investir o mínimo de recursos nos ativos restantes
+    if penalizacao:
+        concentracao = np.sum(carteira**2)
+        score -= 0.2 * concentracao
+        
     return score
 
 #seleção por torneio
@@ -79,31 +97,34 @@ def mutacao(carteira, taxa=0.1):
     return carteira
 
 #loop principal do algoritmo
-def algoritmo_genetico(perfil):
+def algoritmo_genetico(perfil, elitismo = False, penalizacao = True):
     TAM_POP = 100
     GERACOES = 200
-    ELITE_SIZE = 3
+    ELITE_SIZE = 3 if elitismo else 0
 
     populacao = criar_populacao(TAM_POP)
 
     historico_fitness = []
-    historico_media = []
 
     for geracao in range(GERACOES):
         #Avaliação
-        fitness_pop = [fitness(c, perfil) for c in populacao]
+        fitness_pop = [
+            fitness(c, perfil, penalizacao) for c in populacao
+        ]
+
         melhor_fitness = max(fitness_pop)
-        media_fitness = sum(fitness_pop) / len(fitness_pop)
-        
         historico_fitness.append(melhor_fitness)
-        historico_media.append(media_fitness)
 
         nova_pop = []
 
         #Se ELITE_SIZE for zero, simplesmente roda algoritmo genetico com nova_pop vazia
         if ELITE_SIZE > 0:
             #Ordena população (melhores primeiro)
-            populacao_ordenada = sorted(populacao, key=lambda c: fitness(c, perfil), reverse=True)
+            populacao_ordenada = sorted(
+                populacao,
+                key=lambda c: fitness(c, perfil, penalizacao),
+                reverse=True
+            )
             #Elitismo (copiando os melhores para nova_pop)
             nova_pop.extend(populacao_ordenada[:ELITE_SIZE])
         
@@ -118,9 +139,9 @@ def algoritmo_genetico(perfil):
 
         populacao = nova_pop
 
-    melhor = max(populacao, key=lambda c: fitness(c, perfil))
+    melhor = max(populacao, key=lambda c: fitness(c, perfil, penalizacao))
 
-    return melhor, historico_fitness, historico_media
+    return melhor, historico_fitness
 
 #Fazer com que a carteira respeite PESO_MIN e PESO_MAX
 def ajustar_carteira(pesos):
@@ -139,32 +160,65 @@ def ajustar_carteira(pesos):
     pesos = pesos / np.sum(pesos)
     return pesos
 
-#Rodar todos os perfis automaticamente
+
+#Gráfico 1 --> Perfis com elitismo
+plt.figure(figsize=(8,5))
+
 for nome, perfil in perfis.items():
-    print("\n==========================")
-    print("Perfil:", nome)
+    _, hist = algoritmo_genetico(perfil, elitismo=True, penalizacao=True)
+    plt.plot(hist, label=nome)
 
-    melhor_carteira, hist_fitness, _ = algoritmo_genetico(perfil)
-
-    for ativo, peso in zip(ativos, melhor_carteira):
-        print(f"{ativo}: {peso:.2%}")
-
-    retorno = round(np.sum(melhor_carteira * retornos), 3)
-    dividendos_total = round(np.sum(melhor_carteira * dividendos), 3)
-    risco = round(np.sum(melhor_carteira * riscos), 3)
-
-    print("Retorno:", retorno)
-    print("Dividendos:", dividendos_total)
-    print("Risco:", risco)
-
-plt.figure(figsize=(8, 4))
-
-plt.plot(hist_fitness, label="Melhor Fitness")
-
+plt.title("Comparação entre Perfis de Investidor")
 plt.xlabel("Geração")
 plt.ylabel("Fitness")
-plt.title("Convergência do Algoritmo Genético")
-
 plt.legend()
-plt.savefig("com_elitismo.png")
+
+plt.savefig("comparacao_perfis.png", dpi=300)
 plt.show()
+
+#Gráfico 2 --> Com vs Sem elitismo
+perfil = perfis["dividendos"]
+
+_, hist_sem = algoritmo_genetico(perfil, elitismo=False, penalizacao=True)
+_, hist_com = algoritmo_genetico(perfil, elitismo=True, penalizacao=True)
+
+plt.figure(figsize=(8,5))
+
+plt.plot(hist_sem, label="Sem Elitismo")
+plt.plot(hist_com, label="Com Elitismo")
+
+plt.title("Impacto do Elitismo")
+plt.xlabel("Geração")
+plt.ylabel("Fitness")
+plt.legend()
+
+plt.savefig("elitismo.png", dpi=300)
+plt.show()
+
+#Gráfico 3 --> Penalização de concentração
+perfil = perfis["dividendos"]
+
+melhor_sem, hist_sem_penal = algoritmo_genetico(perfil, elitismo=True, penalizacao=False)
+melhor_com, hist_com_penal = algoritmo_genetico(perfil, elitismo=True, penalizacao=True)
+
+plt.figure(figsize=(8,5))
+
+plt.plot(hist_sem_penal, label="Sem Penalização")
+plt.plot(hist_com_penal, label="Com Penalização")
+
+plt.title("Impacto da Penalização de Concentração")
+plt.xlabel("Geração")
+plt.ylabel("Fitness")
+plt.legend()
+
+plt.savefig("penalizacao.png", dpi=300)
+plt.show()
+
+#Comparação de Carteiras
+print("\nSem penalização:")
+for a, p in zip(ativos, melhor_sem):
+    print(a, f"{p:.2%}")
+
+print("\nCom penalização:")
+for a, p in zip(ativos, melhor_com):
+    print(a, f"{p:.2%}")
