@@ -264,65 +264,58 @@ def ajustar_carteira(pesos):
     #retorna o array ajustado
     return pesos
 
-
-#Gráfico 1 --> Perfis com elitismo
-plt.figure(figsize=(8,5))
-
+#Melhores carteiras por perfil
+PATH = "graficos/ag/"
 for nome, perfil in perfis.items():
-    _, hist = algoritmo_genetico(perfil, elitismo=True, penalizacao=True)
-    plt.plot(hist, label=nome)
+    
+    #executa algoritmo
+    _, hist_sem = algoritmo_genetico(perfil, elitismo=False, penalizacao=True)
+    melhor_carteira, hist_com = algoritmo_genetico(perfil, elitismo=True, penalizacao=True)
 
-plt.title("Comparação entre Perfis de Investidor")
-plt.xlabel("Geração")
-plt.ylabel("Fitness")
-plt.legend()
+    retorno = np.sum(melhor_carteira * retornos)
+    dividendos_total = np.sum(melhor_carteira * dividendos)
+    risco = np.sum(melhor_carteira * riscos)
 
-plt.savefig("comparacao_perfis.png", dpi=300)
-plt.show()
+    print(f"\nPerfil: {nome.upper()}")
+    print("-" * 30)
 
-#Gráfico 2 --> Com vs Sem elitismo
-perfil = perfis["dividendos"]
+    for ativo, peso in zip(ativos, melhor_carteira):
+        print(f"{ativo}: {peso:.2%}")
 
-_, hist_sem = algoritmo_genetico(perfil, elitismo=False, penalizacao=True)
-_, hist_com = algoritmo_genetico(perfil, elitismo=True, penalizacao=True)
+    print("\nMétricas:")
+    print(f"Retorno: {retorno:.4f}")
+    print(f"Dividendos: {dividendos_total:.4f}")
+    print(f"Risco: {risco:.4f}")
 
-plt.figure(figsize=(8,5))
+    #cria figura com 2 gráficos
+    plt.figure(figsize=(10, 4))
 
-plt.plot(hist_sem, label="Sem Elitismo")
-plt.plot(hist_com, label="Com Elitismo")
+    #gráfico 1 - sem elitismo
+    plt.subplot(1, 2, 1)
+    plt.plot(hist_sem)
+    plt.title(f"{nome.capitalize()} - Sem Elitismo")
+    plt.xlabel("Geração")
+    plt.ylabel("Fitness")
 
-plt.title("Impacto do Elitismo")
-plt.xlabel("Geração")
-plt.ylabel("Fitness")
-plt.legend()
+    #gráfico 2 - com elitismo
+    plt.subplot(1, 2, 2)
+    plt.plot(hist_com)
+    plt.title(f"{nome.capitalize()} - Com Elitismo")
+    plt.xlabel("Geração")
+    plt.ylabel("Fitness")
 
-plt.savefig("elitismo.png", dpi=300)
-plt.show()
+    plt.tight_layout()
 
-#Gráfico 3 --> Penalização de concentração
-perfil = perfis["dividendos"]
+    #salva imagem
+    plt.savefig(f"{PATH}{nome}_elitismo.png", dpi=300)
+    plt.show()
 
-melhor_sem, hist_sem_penal = algoritmo_genetico(perfil, elitismo=True, penalizacao=False)
-melhor_com, hist_com_penal = algoritmo_genetico(perfil, elitismo=True, penalizacao=True)
+    #grafico da carteira
+    plt.figure(figsize=(6,6))
 
-plt.figure(figsize=(8,5))
+    plt.pie(melhor_carteira, labels=ativos, autopct='%1.1f%%')
 
-plt.plot(hist_sem_penal, label="Sem Penalização")
-plt.plot(hist_com_penal, label="Com Penalização")
+    plt.title(f"Distribuição da Carteira - {nome.capitalize()}")
 
-plt.title("Impacto da Penalização de Concentração")
-plt.xlabel("Geração")
-plt.ylabel("Fitness")
-plt.legend()
-
-plt.savefig("penalizacao.png", dpi=300)
-plt.show()
-
-#Comparação de Carteiras
-print("\nSem penalização:")
-for a, p in zip(ativos, melhor_sem):
-    print(a, f"{p:.2%}")
-
-print("\nCom penalização:")
-for a, p in zip(ativos, melhor_com):
-    print(a, f"{p:.2%}")
+    plt.savefig(f"{PATH}carteira_{nome.capitalize()}.png", dpi=300)
+    plt.show()
